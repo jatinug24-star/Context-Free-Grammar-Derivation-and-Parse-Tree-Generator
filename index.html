@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CFG Visualizer — Grammar Derivation & Parse Trees</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #13161d;
+    --surface2: #1a1e28;
+    --border: #252a38;
+    --accent: #e8c84a;
+    --accent2: #5b8fff;
+    --accent3: #ff6b6b;
+    --text: #e8eaf0;
+    --text-muted: #6b7280;
+    --text-dim: #9ca3af;
+    --green: #4ade80;
+    --purple: #a78bfa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -20%, rgba(91,143,255,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 60% at 80% 110%, rgba(232,200,74,0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { max-width: 1280px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 1; }
+
+  /* ── Header ── */
+  header {
+    padding: 3rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 3rem;
+  }
+  .header-inner { display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem; flex-wrap: wrap; }
+  .logo-block {}
+  .logo-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  h1 span { color: var(--accent); }
+  .header-desc {
+    font-size: 0.92rem;
+    color: var(--text-muted);
+    max-width: 380px;
+    line-height: 1.6;
+    margin-top: 0.5rem;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 100px; padding: 0.35rem 0.9rem;
+    font-family: 'DM Mono', monospace; font-size: 0.72rem;
+    color: var(--text-dim); letter-spacing: 0.05em;
+  }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  /* ── Layout ── */
+  .layout { display: grid; grid-template-columns: 380px 1fr; gap: 2rem; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  /* ── Panel ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 1.1rem 1.4rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .panel-icon {
+    width: 28px; height: 28px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem;
+  }
+  .panel-icon.yellow { background: rgba(232,200,74,0.15); }
+  .panel-icon.blue { background: rgba(91,143,255,0.15); }
+  .panel-icon.green { background: rgba(74,222,128,0.15); }
+  .panel-icon.purple { background: rgba(167,139,250,0.15); }
+  .panel-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text-dim);
+    font-weight: 500;
+  }
+  .panel-body { padding: 1.4rem; }
+
+  /* ── Form Elements ── */
+  label {
+    display: block;
+    font-size: 0.78rem; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--text-muted); font-weight: 500;
+    margin-bottom: 0.4rem; margin-top: 1rem;
+  }
+  label:first-child { margin-top: 0; }
+
+  textarea, input[type="text"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    padding: 0.75rem 1rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    resize: vertical;
+  }
+  textarea:focus, input[type="text"]:focus {
+    border-color: var(--accent2);
+    box-shadow: 0 0 0 3px rgba(91,143,255,0.12);
+  }
+  textarea { min-height: 130px; line-height: 1.6; }
+
+  .hint {
+    font-size: 0.73rem; color: var(--text-muted);
+    margin-top: 0.35rem; line-height: 1.5;
+  }
+
+  /* ── Example Grammar ── */
+  .examples { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+  .example-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.6rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .example-btn:hover { background: var(--border); border-color: var(--accent); }
+
+  /* ── Buttons ── */
+  .btn-row { display: flex; gap: 0.6rem; margin-top: 1.2rem; }
+  .btn {
+    flex: 1; padding: 0.75rem 1rem;
+    border-radius: 10px; border: none;
+    font-family: 'DM Sans', sans-serif; font-size: 0.88rem; font-weight: 500;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-primary {
+    background: var(--accent); color: #0d0f14;
+  }
+  .btn-primary:hover { background: #f0d460; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(232,200,74,0.25); }
+  .btn-secondary {
+    background: var(--surface2); color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--text-muted); color: var(--text); }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 0.85rem 1.4rem;
+    font-size: 0.82rem; font-weight: 500;
+    color: var(--text-muted); cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s; white-space: nowrap;
+    background: none; border-top: none; border-left: none; border-right: none;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Result area ── */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── Derivation Steps ── */
+  .derivation-wrapper { padding: 1.4rem; }
+  .deriv-type-label {
+    font-family: 'DM Mono', monospace; font-size: 0.7rem;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent2); margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .deriv-type-label::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+  .deriv-step {
+    display: flex; align-items: baseline; gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    animation: fadeIn 0.3s ease both;
+  }
+  .step-num {
+    font-family: 'DM Mono', monospace; font-size: 0.7rem;
+    color: var(--text-muted); min-width: 1.5rem; text-align: right;
+  }
+  .step-arrow {
+    font-family: 'DM Mono', monospace; font-size: 0.8rem;
+    color: var(--border);
+  }
+  .step-str {
+    font-family: 'DM Mono', monospace; font-size: 0.9rem;
+    color: var(--text); line-height: 1.5; word-break: break-all;
+  }
+  .step-rule {
+    margin-left: auto; font-family: 'DM Mono', monospace; font-size: 0.7rem;
+    color: var(--text-muted); white-space: nowrap;
+  }
+  .step-str .highlight-nt {
+    color: var(--accent); font-weight: 500;
+    background: rgba(232,200,74,0.1);
+    border-radius: 3px; padding: 0 2px;
+  }
+  .success-msg {
+    margin-top: 1rem; padding: 0.75rem 1rem;
+    background: rgba(74,222,128,0.08);
+    border: 1px solid rgba(74,222,128,0.25);
+    border-radius: 10px;
+    font-size: 0.85rem; color: var(--green);
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .error-msg {
+    padding: 0.75rem 1rem;
+    background: rgba(255,107,107,0.08);
+    border: 1px solid rgba(255,107,107,0.25);
+    border-radius: 10px;
+    font-size: 0.85rem; color: var(--accent3);
+  }
+
+  /* ── Parse Tree SVG ── */
+  #tree-container {
+    padding: 1.4rem;
+    overflow-x: auto;
+  }
+  #tree-svg { display: block; margin: 0 auto; }
+  .tree-node-circle {
+    fill: var(--surface2); stroke: var(--accent2); stroke-width: 2;
+    transition: fill 0.2s;
+  }
+  .tree-node-circle:hover { fill: rgba(91,143,255,0.2); }
+  .tree-node-circle.terminal { stroke: var(--green); }
+  .tree-node-text {
+    font-family: 'DM Mono', monospace; font-size: 13px;
+    fill: var(--text); text-anchor: middle; dominant-baseline: central;
+    pointer-events: none;
+  }
+  .tree-node-text.terminal { fill: var(--green); }
+  .tree-edge { stroke: var(--border); stroke-width: 1.5; }
+
+  /* ── Grammar Summary ── */
+  .grammar-summary { padding: 1.4rem; }
+  .rule-row {
+    display: flex; align-items: baseline; gap: 1rem;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-family: 'DM Mono', monospace; font-size: 0.88rem;
+  }
+  .rule-lhs { color: var(--accent); min-width: 2rem; }
+  .rule-arrow { color: var(--text-muted); }
+  .rule-rhs { color: var(--text); }
+  .rule-rhs .t { color: var(--green); }
+  .rule-rhs .nt { color: var(--accent2); }
+
+  /* ── Info grid ── */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1rem; }
+  .info-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 0.75rem 1rem;
+  }
+  .info-card-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .info-card-value { font-family: 'DM Mono', monospace; font-size: 1.1rem; color: var(--accent); margin-top: 0.2rem; }
+
+  /* ── Placeholder ── */
+  .placeholder {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 4rem 2rem; text-align: center; gap: 1rem;
+  }
+  .placeholder-icon { font-size: 2.5rem; opacity: 0.3; }
+  .placeholder-text { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; max-width: 300px; }
+
+  /* ── Animations ── */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .panel { animation: fadeIn 0.4s ease both; }
+
+  /* ── Footer ── */
+  footer {
+    margin-top: 4rem; padding: 2rem 0;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 0.78rem; color: var(--text-muted);
+    font-family: 'DM Mono', monospace; letter-spacing: 0.05em;
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="logo-block">
+        <div class="logo-label">// formal language theory</div>
+        <h1>CFG <span>Visualizer</span></h1>
+        <p class="header-desc">Explore derivation sequences and parse trees for context-free grammars. Input rules and a string to see step-by-step derivations.</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="layout">
+
+    <!-- Left: Input Panel -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-icon yellow">✦</div>
+          <span class="panel-title">Grammar Input</span>
+        </div>
+        <div class="panel-body">
+
+          <label>Quick Examples</label>
+          <div class="examples">
+            <button class="example-btn" onclick="loadExample('arithmetic')">Arithmetic</button>
+            <button class="example-btn" onclick="loadExample('palindrome')">Palindrome</button>
+            <button class="example-btn" onclick="loadExample('anbn')">aⁿbⁿ</button>
+            <button class="example-btn" onclick="loadExample('balanced')">Balanced Parens</button>
+          </div>
+
+          <label for="grammar-input">Production Rules</label>
+          <textarea id="grammar-input" placeholder="S -> a S b&#10;S -> ε&#10;&#10;One rule per line. Use '->' or '→'.&#10;Use 'ε' or 'eps' for epsilon."></textarea>
+          <p class="hint">Format: <code style="color:var(--accent)">S -> a B | ε</code> or one alternative per line. Uppercase = non-terminal.</p>
+
+          <label for="start-sym">Start Symbol</label>
+          <input type="text" id="start-sym" value="S" placeholder="S" style="max-width:80px"/>
+
+          <label for="string-input">Input String</label>
+          <input type="text" id="string-input" placeholder="e.g. aabb"/>
+          <p class="hint">Use <code style="color:var(--accent)">ε</code> or leave blank for the empty string.</p>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="runDerivation()">▶ Derive</button>
+            <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grammar Summary panel (filled after parsing) -->
+      <div class="panel" id="grammar-summary-panel" style="margin-top:1.2rem; display:none;">
+        <div class="panel-header">
+          <div class="panel-icon blue">≡</div>
+          <span class="panel-title">Parsed Grammar</span>
+        </div>
+        <div class="grammar-summary" id="grammar-summary-body"></div>
+      </div>
+    </div>
+
+    <!-- Right: Results Panel -->
+    <div class="panel">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('leftmost')">Leftmost Derivation</button>
+        <button class="tab" onclick="switchTab('rightmost')">Rightmost Derivation</button>
+        <button class="tab" onclick="switchTab('tree')">Parse Tree</button>
+      </div>
+
+      <div id="tab-leftmost" class="tab-content active">
+        <div id="leftmost-content">
+          <div class="placeholder">
+            <div class="placeholder-icon">⊢</div>
+            <p class="placeholder-text">Enter a grammar and an input string, then click <strong>Derive</strong> to see the leftmost derivation sequence.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-rightmost" class="tab-content">
+        <div id="rightmost-content">
+          <div class="placeholder">
+            <div class="placeholder-icon">⊣</div>
+            <p class="placeholder-text">The rightmost derivation will appear here after you run a derivation.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-tree" class="tab-content">
+        <div id="tree-content">
+          <div class="placeholder">
+            <div class="placeholder-icon">🌲</div>
+            <p class="placeholder-text">The parse tree will be drawn here. It illustrates the hierarchical structure of the derivation.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>cfg-visualizer &nbsp;·&nbsp; context-free grammar explorer &nbsp;·&nbsp; built for formal language students</footer>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  EXAMPLE GRAMMARS
+// ─────────────────────────────────────────────
+const EXAMPLES = {
+  arithmetic: {
+    grammar: `E -> E + T | T\nT -> T * F | F\nF -> ( E ) | id`,
+    start: 'E',
+    string: 'id + id * id'
+  },
+  palindrome: {
+    grammar: `S -> a S a | b S b | a | b | ε`,
+    start: 'S',
+    string: 'abba'
+  },
+  anbn: {
+    grammar: `S -> a S b | ε`,
+    start: 'S',
+    string: 'aaabbb'
+  },
+  balanced: {
+    grammar: `S -> ( S ) S | ε`,
+    start: 'S',
+    string: '(())()'
+  }
+};
+
+function loadExample(name) {
+  const ex = EXAMPLES[name];
+  document.getElementById('grammar-input').value = ex.grammar;
+  document.getElementById('start-sym').value = ex.start;
+  document.getElementById('string-input').value = ex.string;
+}
+
+function clearAll() {
+  document.getElementById('grammar-input').value = '';
+  document.getElementById('string-input').value = '';
+  document.getElementById('start-sym').value = 'S';
+  document.getElementById('grammar-summary-panel').style.display = 'none';
+  ['leftmost','rightmost','tree'].forEach(t => {
+    const el = document.getElementById(t === 'tree' ? 'tree-content' : t + '-content');
+    if(el) el.innerHTML = `<div class="placeholder"><div class="placeholder-icon">◌</div><p class="placeholder-text">Results cleared.</p></div>`;
+  });
+}
+
+// ─────────────────────────────────────────────
+//  TABS
+// ─────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const names = ['leftmost','rightmost','tree'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ─────────────────────────────────────────────
+//  GRAMMAR PARSER
+// ─────────────────────────────────────────────
+function parseGrammar(text) {
+  const rules = {};  // { NT: [ [sym, sym, ...], ... ] }
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//') && !l.startsWith('#'));
+  for(const line of lines) {
+    const parts = line.split(/->|→/);
+    if(parts.length < 2) continue;
+    const lhs = parts[0].trim();
+    if(!lhs) continue;
+    const rhsParts = parts[1].split('|');
+    for(const rhs of rhsParts) {
+      const trimmed = rhs.trim();
+      const symbols = tokenizeRHS(trimmed);
+      if(!rules[lhs]) rules[lhs] = [];
+      rules[lhs].push(symbols);
+    }
+  }
+  return rules;
+}
+
+function tokenizeRHS(rhs) {
+  if(rhs === 'ε' || rhs === 'eps' || rhs === '') return []; // epsilon
+  // Tokenize: multi-char terminals in quotes? Keep it simple:
+  // Uppercase sequences = non-terminals, rest = terminals (split by space or char)
+  const spaced = rhs.trim();
+  if(spaced.includes(' ')) {
+    return spaced.split(/\s+/).filter(s => s && s !== 'ε' && s !== 'eps');
+  }
+  // no spaces: each char is a symbol, uppercase = NT
+  const tokens = [];
+  let i = 0;
+  while(i < spaced.length) {
+    if(spaced[i] === 'ε') { i++; continue; }
+    // greedy uppercase run = one NT
+    if(spaced[i] === spaced[i].toUpperCase() && /[A-Z]/.test(spaced[i])) {
+      tokens.push(spaced[i]);
+    } else {
+      tokens.push(spaced[i]);
+    }
+    i++;
+  }
+  return tokens;
+}
+
+function isNT(sym, rules) { return sym in rules; }
+
+// ─────────────────────────────────────────────
+//  CYK / Earley-lite: simple recursive descent
+//  with memoization for small grammars
+// ─────────────────────────────────────────────
+// We do a bounded DFS to find a parse tree
+const MAX_DEPTH = 25;
+const MAX_STEPS = 500;
+
+function findParseTree(rules, start, target) {
+  // target is array of terminal strings
+  const memo = new Map();
+
+  function key(sym, pos, end) { return `${sym}:${pos}:${end}`; }
+
+  function parse(sym, pos, end) {
+    const k = key(sym, pos, end);
+    if(memo.has(k)) return memo.get(k);
+    memo.set(k, null); // avoid infinite loops
+
+    if(!isNT(sym, rules)) {
+      // terminal
+      if(pos < end && pos < target.length && target[pos] === sym && end === pos+1) {
+        const node = { sym, children: [], terminal: true, span: [pos, end] };
+        memo.set(k, node);
+        return node;
+      }
+      return null;
+    }
+
+    const prods = rules[sym];
+    for(const prod of prods) {
+      if(prod.length === 0) {
+        // epsilon
+        if(pos === end) {
+          const node = { sym, children: [{ sym: 'ε', children: [], terminal: true, span:[pos,pos] }], terminal: false, span: [pos, end] };
+          memo.set(k, node);
+          return node;
+        }
+        continue;
+      }
+      const result = splitParse(sym, prod, pos, end);
+      if(result) { memo.set(k, result); return result; }
+    }
+    return null;
+  }
+
+  function splitParse(lhs, syms, pos, end) {
+    if(syms.length === 0) return pos === end ? { sym: lhs, children: [], terminal: false, span:[pos,end] } : null;
+    if(syms.length === 1) {
+      const child = parse(syms[0], pos, end);
+      if(child) return { sym: lhs, children: [child], terminal: false, span:[pos,end] };
+      return null;
+    }
+    // try all split points
+    for(let mid = pos; mid <= end; mid++) {
+      if(mid === pos && !canBeEmpty(syms[0], rules, new Set())) continue;
+      const firstChild = parse(syms[0], pos, mid);
+      if(!firstChild) continue;
+      const rest = splitParse(lhs, syms.slice(1), mid, end);
+      if(rest) {
+        return { sym: lhs, children: [firstChild, ...rest.children], terminal: false, span:[pos,end] };
+      }
+    }
+    return null;
+  }
+
+  const emptyCache = {};
+  function canBeEmpty(sym, rules, visited) {
+    if(visited.has(sym)) return false;
+    if(!(sym in rules)) return false;
+    visited.add(sym);
+    for(const prod of rules[sym]) {
+      if(prod.length === 0) return true;
+      if(prod.every(s => canBeEmpty(s, rules, new Set(visited)))) return true;
+    }
+    return false;
+  }
+
+  return parse(start, 0, target.length);
+}
+
+// ─────────────────────────────────────────────
+//  DERIVATION SEQUENCE (leftmost / rightmost)
+// ─────────────────────────────────────────────
+function deriveFromTree(tree, mode) {
+  // mode: 'leftmost' or 'rightmost'
+  const steps = [];
+  // Convert tree to sentential form steps
+  function sentential(node) {
+    if(node.terminal) return [node.sym === 'ε' ? '' : node.sym];
+    if(node.children.length === 0) return [node.sym];
+    return node.children.flatMap(c => {
+      if(c.terminal) return [c.sym === 'ε' ? '' : c.sym];
+      // if child's children are all resolved, return terminals, else NT
+      return hasUnresolvedNT(c) ? [c] : c.children.flatMap(gc => sentential(gc));
+    });
+  }
+  function hasUnresolvedNT(node) { return !node.terminal; }
+
+  // Walk tree in leftmost or rightmost order, collecting (sentential form, rule applied)
+  const sequence = [];
+  buildSteps(tree, mode, sequence, []);
+  return sequence;
+}
+
+function buildSteps(tree, mode, sequence, currentForms) {
+  // We'll do a simulation: start with [start], expand one NT at a time
+  // This is cleaner than recursing the tree
+}
+
+// Actually: cleaner approach - simulate derivation from tree structure
+function simulateDerivation(tree, mode) {
+  // Flatten tree nodes in leftmost or rightmost order
+  const steps = [];
+
+  // Represent sentential form as array of nodes (NTs) and strings (terminals)
+  // Start: root NT
+  let form = [tree]; // each item is a tree node (NT) or a string (terminal)
+
+  steps.push({ form: formToStr(form), rule: null });
+
+  let safety = 0;
+  while(form.some(x => typeof x === 'object' && !x.terminal) && safety++ < MAX_STEPS) {
+    // find index of next NT to expand
+    let idx = -1;
+    if(mode === 'leftmost') {
+      idx = form.findIndex(x => typeof x === 'object' && !x.terminal);
+    } else {
+      for(let i = form.length - 1; i >= 0; i--) {
+        if(typeof form[i] === 'object' && !form[i].terminal) { idx = i; break; }
+      }
+    }
+    if(idx === -1) break;
+
+    const node = form[idx];
+    const expansion = node.children; // array of child nodes
+    const ruleName = `${node.sym} → ${expansion.length === 0 ? 'ε' : expansion.map(c => c.sym).join(' ')}`;
+    form = [...form.slice(0, idx), ...expansion, ...form.slice(idx + 1)];
+    steps.push({ form: formToStr(form), rule: ruleName, expandedSym: node.sym });
+  }
+
+  return steps;
+}
+
+function formToStr(form) {
+  return form.map(x => {
+    if(typeof x === 'string') return x;
+    return x.sym === 'ε' ? '' : x.sym;
+  }).join(' ');
+}
+
+// ─────────────────────────────────────────────
+//  MAIN RUN
+// ─────────────────────────────────────────────
+function runDerivation() {
+  const grammarText = document.getElementById('grammar-input').value.trim();
+  const startSym = document.getElementById('start-sym').value.trim() || 'S';
+  const inputStr = document.getElementById('string-input').value.trim();
+
+  if(!grammarText) {
+    alert('Please enter grammar rules.');
+    return;
+  }
+
+  const rules = parseGrammar(grammarText);
+
+  if(!rules[startSym]) {
+    showError('leftmost-content', `Start symbol "${startSym}" not found in grammar.`);
+    showError('rightmost-content', '');
+    document.getElementById('tree-content').innerHTML = '';
+    return;
+  }
+
+  // Render grammar summary
+  renderGrammarSummary(rules);
+
+  // Tokenize input string
+  const target = inputStr === '' || inputStr === 'ε' ? [] : inputStr.trim().split(/\s+/).length > 1
+    ? inputStr.trim().split(/\s+/)
+    : inputStr.trim().split('').filter(c => c !== ' ');
+
+  // Find parse tree
+  const tree = findParseTree(rules, startSym, target);
+
+  if(!tree) {
+    showError('leftmost-content', `The string "${inputStr || 'ε'}" is NOT in the language defined by this grammar.`);
+    showError('rightmost-content', `The string "${inputStr || 'ε'}" is NOT in the language.`);
+    document.getElementById('tree-content').innerHTML = `<div class="placeholder"><div class="placeholder-icon">✗</div><p class="placeholder-text">No parse tree — the string is not derivable.</p></div>`;
+    return;
+  }
+
+  const lmSteps = simulateDerivation(tree, 'leftmost');
+  const rmSteps = simulateDerivation(tree, 'rightmost');
+
+  renderDerivation('leftmost-content', lmSteps, 'Leftmost', inputStr || 'ε');
+  renderDerivation('rightmost-content', rmSteps, 'Rightmost', inputStr || 'ε');
+  renderParseTree(tree);
+
+  switchTab('leftmost');
+}
+
+// ─────────────────────────────────────────────
+//  RENDER: DERIVATION
+// ─────────────────────────────────────────────
+function renderDerivation(containerId, steps, typeName, inputStr) {
+  const el = document.getElementById(containerId);
+  if(!steps.length) { el.innerHTML = `<div class="error-msg">No derivation found.</div>`; return; }
+
+  const finalStr = steps[steps.length-1].form || 'ε';
+
+  let html = `<div class="derivation-wrapper">`;
+  html += `<div class="info-grid" style="margin-bottom:1.2rem">
+    <div class="info-card"><div class="info-card-label">Type</div><div class="info-card-value" style="font-size:0.9rem;color:var(--accent2)">${typeName}</div></div>
+    <div class="info-card"><div class="info-card-label">Steps</div><div class="info-card-value">${steps.length - 1}</div></div>
+  </div>`;
+  html += `<div class="deriv-type-label">${typeName} Derivation</div>`;
+
+  steps.forEach((step, i) => {
+    const formHtml = highlightNTs(step.form || 'ε');
+    html += `<div class="deriv-step" style="animation-delay:${i*0.04}s">
+      <span class="step-num">${i}</span>
+      ${i > 0 ? '<span class="step-arrow">⇒</span>' : '<span class="step-arrow" style="opacity:0">⇒</span>'}
+      <span class="step-str">${formHtml}</span>
+      ${step.rule ? `<span class="step-rule">${escapeHtml(step.rule)}</span>` : ''}
+    </div>`;
+  });
+
+  html += `<div class="success-msg">✓ Successfully derived <strong>"${escapeHtml(inputStr)}"</strong></div>`;
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function highlightNTs(str) {
+  // Highlight uppercase tokens as non-terminals
+  return str.split(' ').map(tok => {
+    if(/^[A-Z][A-Z0-9']*$/.test(tok)) return `<span class="highlight-nt">${escapeHtml(tok)}</span>`;
+    return escapeHtml(tok);
+  }).join(' ');
+}
+
+function showError(containerId, msg) {
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML = msg ? `<div class="derivation-wrapper"><div class="error-msg">⚠ ${escapeHtml(msg)}</div></div>` : '';
+}
+
+// ─────────────────────────────────────────────
+//  RENDER: GRAMMAR SUMMARY
+// ─────────────────────────────────────────────
+function renderGrammarSummary(rules) {
+  const panel = document.getElementById('grammar-summary-panel');
+  const body = document.getElementById('grammar-summary-body');
+  const nts = Object.keys(rules);
+  const allSyms = new Set(nts.flatMap(nt => rules[nt].flat()));
+  const terminals = [...allSyms].filter(s => !nts.includes(s) && s !== 'ε');
+
+  let html = `<div class="info-grid">
+    <div class="info-card"><div class="info-card-label">Non-Terminals</div><div class="info-card-value">${nts.length}</div></div>
+    <div class="info-card"><div class="info-card-label">Terminals</div><div class="info-card-value">${terminals.length}</div></div>
+  </div>`;
+
+  for(const nt of nts) {
+    for(const prod of rules[nt]) {
+      const rhs = prod.length === 0 ? 'ε' : prod.map(s =>
+        nts.includes(s)
+          ? `<span class="nt">${escapeHtml(s)}</span>`
+          : `<span class="t">${escapeHtml(s)}</span>`
+      ).join(' ');
+      html += `<div class="rule-row"><span class="rule-lhs">${escapeHtml(nt)}</span><span class="rule-arrow">→</span><span class="rule-rhs">${rhs}</span></div>`;
+    }
+  }
+  body.innerHTML = html;
+  panel.style.display = '';
+}
+
+// ─────────────────────────────────────────────
+//  RENDER: PARSE TREE (SVG)
+// ─────────────────────────────────────────────
+function renderParseTree(tree) {
+  const container = document.getElementById('tree-content');
+
+  // Layout tree
+  const NODE_R = 22;
+  const H_GAP = 54;
+  const V_GAP = 72;
+
+  // Assign positions
+  function assignPos(node, depth) {
+    node._depth = depth;
+    if(!node.children || node.children.length === 0) {
+      node._width = 1;
+      return;
+    }
+    node.children.forEach(c => assignPos(c, depth + 1));
+    node._width = node.children.reduce((s, c) => s + c._width, 0);
+  }
+
+  function assignX(node, left) {
+    if(!node.children || node.children.length === 0) {
+      node._x = left + 0.5;
+      return;
+    }
+    let cur = left;
+    node.children.forEach(c => { assignX(c, cur); cur += c._width; });
+    node._x = (node.children[0]._x + node.children[node.children.length-1]._x) / 2;
+  }
+
+  assignPos(tree, 0);
+  assignX(tree, 0);
+
+  // Collect all nodes
+  const nodes = [];
+  function collectNodes(n) { nodes.push(n); (n.children||[]).forEach(collectNodes); }
+  collectNodes(tree);
+
+  const maxDepth = Math.max(...nodes.map(n => n._depth));
+  const maxWidth = tree._width;
+
+  const W = Math.max(maxWidth * H_GAP + 40, 400);
+  const H = (maxDepth + 1) * V_GAP + 60;
+
+  function nx(n) { return n._x * H_GAP + 20; }
+  function ny(n) { return n._depth * V_GAP + 40; }
+
+  let svg = `<svg id="tree-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .tree-node-circle { fill: #1a1e28; stroke: #5b8fff; stroke-width: 2; }
+    .tree-node-circle.terminal { stroke: #4ade80; }
+    .tree-node-text { font-family: 'DM Mono', monospace; font-size: 13px; fill: #e8eaf0; text-anchor: middle; dominant-baseline: central; }
+    .tree-node-text.terminal { fill: #4ade80; }
+    .tree-edge { stroke: #252a38; stroke-width: 1.5; }
+    .tree-node-circle.eps { stroke: #a78bfa; }
+    .tree-node-text.eps { fill: #a78bfa; }
+  </style>`;
+
+  // Draw edges
+  nodes.forEach(n => {
+    if(n.children) {
+      n.children.forEach(c => {
+        svg += `<line class="tree-edge" x1="${nx(n)}" y1="${ny(n)}" x2="${nx(c)}" y2="${ny(c)}"/>`;
+      });
+    }
+  });
+
+  // Draw nodes
+  nodes.forEach(n => {
+    const isTerm = n.terminal;
+    const isEps = n.sym === 'ε';
+    const cls = isEps ? 'eps' : isTerm ? 'terminal' : '';
+    const label = n.sym === '' ? 'ε' : n.sym;
+    svg += `<circle class="tree-node-circle ${cls}" cx="${nx(n)}" cy="${ny(n)}" r="${NODE_R}"/>`;
+    svg += `<text class="tree-node-text ${cls}" x="${nx(n)}" y="${ny(n)}">${escapeHtml(label)}</text>`;
+  });
+
+  svg += `</svg>`;
+  container.innerHTML = `<div id="tree-container">${svg}</div>`;
+}
+
+// ─────────────────────────────────────────────
+//  UTILS
+// ─────────────────────────────────────────────
+function escapeHtml(str) {
+  if(typeof str !== 'string') return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
